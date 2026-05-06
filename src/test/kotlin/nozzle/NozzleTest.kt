@@ -188,10 +188,10 @@ class NozzleTest {
         val src = ByteBuffer.allocateDirect(4)
         val dst = ByteBuffer.allocateDirect(4)
         src.put(byteArrayOf(0xFF.toByte(), 0x00, 0x00, 0xFF.toByte()))
-        src.flip()
+        src.rewind()
         val permuteMap = byteArrayOf(2, 1, 0, 3)
         Nozzle.swizzleChannels(src, dst, 1, 1, 4, 4, TextureFormat.RGBA8_UNORM, permuteMap)
-        dst.flip()
+        dst.rewind()
         assertEquals(0x00.toByte(), dst.get())
         assertEquals(0x00.toByte(), dst.get())
         assertEquals(0xFF.toByte(), dst.get())
@@ -213,7 +213,7 @@ class NozzleTest {
         src.flip()
         val permuteMap = byteArrayOf(2, 1, 0, 3)
         Nozzle.swizzleChannels(src, dst, TEST_WIDTH, TEST_HEIGHT, TEST_WIDTH * bpp, TEST_WIDTH * bpp, TextureFormat.RGBA8_UNORM, permuteMap)
-        dst.flip()
+        dst.rewind()
         for (i in 0 until pixelCount) {
             assertEquals(((i + 2) % 256).toByte(), dst.get())
             assertEquals(((i + 1) % 256).toByte(), dst.get())
@@ -227,9 +227,9 @@ class NozzleTest {
         val src = ByteBuffer.allocateDirect(2)
         val dst = ByteBuffer.allocateDirect(4)
         src.putShort(0x1234.toShort())
-        src.flip()
+        src.rewind()
         Nozzle.widenUint16ToUint32(src, dst, 1, 1, 2, 4, 1)
-        dst.flip()
+        dst.rewind()
         assertEquals(0x1234, dst.int)
     }
 
@@ -238,9 +238,9 @@ class NozzleTest {
         val src = ByteBuffer.allocateDirect(2)
         val dst = ByteBuffer.allocateDirect(4)
         src.putShort((-1).toShort())
-        src.flip()
+        src.rewind()
         Nozzle.widenUint16ToUint32(src, dst, 1, 1, 2, 4, 1)
-        dst.flip()
+        dst.rewind()
         assertEquals(0xFFFF, dst.int)
     }
 
@@ -249,9 +249,9 @@ class NozzleTest {
         val src = ByteBuffer.allocateDirect(4)
         val dst = ByteBuffer.allocateDirect(4)
         src.putInt(42)
-        src.flip()
+        src.rewind()
         Nozzle.convertUint32ToFloat32(src, dst, 1, 1, 4, 4, 1)
-        dst.flip()
+        dst.rewind()
         assertEquals(42.0f, dst.float, 0.001f)
     }
 
@@ -261,9 +261,9 @@ class NozzleTest {
         val dst = ByteBuffer.allocateDirect(8)
         src.putInt(0)
         src.putInt(Int.MAX_VALUE)
-        src.flip()
+        src.rewind()
         Nozzle.convertUint32ToFloat32(src, dst, 2, 1, 4, 4, 1)
-        dst.flip()
+        dst.rewind()
         assertEquals(0.0f, dst.float, 0.001f)
         assertEquals(Int.MAX_VALUE.toFloat(), dst.float, 0.001f)
     }
