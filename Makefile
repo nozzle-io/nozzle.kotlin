@@ -61,7 +61,7 @@ ifeq ($(PLATFORM),linux)
 endif
 
 ifeq ($(PLATFORM),windows)
-	CXXFLAGS := -std=c++17 -fno-rtti -O2 -fPIC -DNOZZLE_PLATFORM_WINDOWS=1 -DNOZZLE_HAS_D3D11=1 -DNOZZLE_HAS_OPENGL=1
+	CXXFLAGS := -std=c++17 -fno-exceptions -fno-rtti -O2 -fPIC -DNDEBUG -DNOZZLE_PLATFORM_WINDOWS=1 -DNOZZLE_HAS_D3D11=1 -DNOZZLE_HAS_OPENGL=1
 	PLATFORM_SRCS := \
 		$(NOZZLE_DIR)/src/backends/d3d11/d3d11_backend.cpp \
 		$(NOZZLE_DIR)/src/backends/d3d11/d3d11_texture.cpp \
