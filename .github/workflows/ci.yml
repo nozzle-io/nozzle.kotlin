@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
         java: [17]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -33,7 +33,24 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libdrm-dev libgbm-dev libegl-dev libgl-dev
 
-      - name: Build native JNI library
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-binutils
+
+      - name: Build native JNI library (non-Windows)
+        if: runner.os != 'Windows'
+        run: make
+
+      - name: Build native JNI library (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
         run: make
 
       - name: Compile Kotlin
