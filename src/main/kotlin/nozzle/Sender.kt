@@ -29,7 +29,7 @@ class Sender private constructor(private var ptr: Long) : AutoCloseable {
     }
 
     fun publishTexture(texture: Texture) {
-        NozzleNative.senderPublishTexture(ptr, texture.ptr)
+        NozzleNative.senderPublishTexture(ptr, texture.handle)
     }
 
     fun publishGLTexture(glTextureName: Int, glTarget: Int, width: Int, height: Int, format: TextureFormat) {
