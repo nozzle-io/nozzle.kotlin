@@ -36,10 +36,16 @@ jobs:
       - name: Build native JNI library
         run: make
 
+      - name: Debug native library (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          file .build/libnozzle_jni.so
+          ldd .build/libnozzle_jni.so || true
+
       - name: Compile Kotlin
         run: gradle compileKotlin compileTestKotlin
 
       - name: Run tests
-        run: gradle test
+        run: gradle test --info
         env:
           JAVA_TOOL_OPTIONS: "-Djava.library.path=${{ github.workspace }}/.build"

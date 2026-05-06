@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class NozzleTest {
 
@@ -224,8 +225,8 @@ class NozzleTest {
 
     @Test
     fun widenUint16ToUint32Basic() {
-        val src = ByteBuffer.allocateDirect(2)
-        val dst = ByteBuffer.allocateDirect(4)
+        val src = ByteBuffer.allocateDirect(2).order(ByteOrder.nativeOrder())
+        val dst = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder())
         src.putShort(0x1234.toShort())
         src.rewind()
         Nozzle.widenUint16ToUint32(src, dst, 1, 1, 2, 4, 1)
@@ -235,8 +236,8 @@ class NozzleTest {
 
     @Test
     fun widenUint16ToUint32MaxValue() {
-        val src = ByteBuffer.allocateDirect(2)
-        val dst = ByteBuffer.allocateDirect(4)
+        val src = ByteBuffer.allocateDirect(2).order(ByteOrder.nativeOrder())
+        val dst = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder())
         src.putShort((-1).toShort())
         src.rewind()
         Nozzle.widenUint16ToUint32(src, dst, 1, 1, 2, 4, 1)
@@ -246,8 +247,8 @@ class NozzleTest {
 
     @Test
     fun convertUint32ToFloat32Basic() {
-        val src = ByteBuffer.allocateDirect(4)
-        val dst = ByteBuffer.allocateDirect(4)
+        val src = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder())
+        val dst = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder())
         src.putInt(42)
         src.rewind()
         Nozzle.convertUint32ToFloat32(src, dst, 1, 1, 4, 4, 1)
@@ -257,8 +258,8 @@ class NozzleTest {
 
     @Test
     fun convertUint32ToFloat32ZeroAndMax() {
-        val src = ByteBuffer.allocateDirect(8)
-        val dst = ByteBuffer.allocateDirect(8)
+        val src = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder())
+        val dst = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder())
         src.putInt(0)
         src.putInt(Int.MAX_VALUE)
         src.rewind()
