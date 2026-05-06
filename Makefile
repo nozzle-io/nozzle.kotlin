@@ -61,7 +61,7 @@ ifeq ($(PLATFORM),linux)
 endif
 
 ifeq ($(PLATFORM),windows)
-	CXXFLAGS := -DNOZZLE_PLATFORM_WINDOWS=1 -DNOZZLE_HAS_D3D11=1 -DNOZZLE_HAS_OPENGL=1
+	CXXFLAGS := -std=c++17 -fno-rtti -O2 -fPIC -DNOZZLE_PLATFORM_WINDOWS=1 -DNOZZLE_HAS_D3D11=1 -DNOZZLE_HAS_OPENGL=1
 	PLATFORM_SRCS := \
 		$(NOZZLE_DIR)/src/backends/d3d11/d3d11_backend.cpp \
 		$(NOZZLE_DIR)/src/backends/d3d11/d3d11_texture.cpp \
@@ -72,6 +72,9 @@ ifeq ($(PLATFORM),windows)
 endif
 
 INCLUDES := -I$(NOZZLE_DIR)/include -I$(NOZZLE_DIR)/src -I$(PLOG_DIR)
+ifeq ($(PLATFORM),linux)
+	INCLUDES += -I/usr/include/libdrm
+endif
 
 ALL_SRCS := $(COMMON_SRCS) $(PLATFORM_SRCS)
 ALL_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(patsubst %.mm,$(BUILD_DIR)/%.o,$(ALL_SRCS)))

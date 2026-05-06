@@ -26,6 +26,9 @@ jobs:
           java-version: ${{ matrix.java }}
           distribution: temurin
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libdrm-dev libgbm-dev libegl-dev libgl-dev
@@ -33,10 +36,10 @@ jobs:
       - name: Build native JNI library
         run: make
 
-      - name: Compile Kotlin (Gradle)
-        run: ./gradlew compileKotlin compileTestKotlin
+      - name: Compile Kotlin
+        run: gradle compileKotlin compileTestKotlin
 
       - name: Run tests
-        run: ./gradlew test
+        run: gradle test
         env:
           JAVA_TOOL_OPTIONS: "-Djava.library.path=.build"
