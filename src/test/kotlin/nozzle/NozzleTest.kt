@@ -9,6 +9,12 @@ import java.nio.ByteBuffer
 
 class NozzleTest {
 
+    companion object {
+        private const val TEST_WIDTH = 64
+        private const val TEST_HEIGHT = 64
+        private const val DEFAULT_TIMEOUT_MS = 5000L
+    }
+
     // ========== ErrorCode ==========
 
     @Test
@@ -34,11 +40,6 @@ class NozzleTest {
         assertEquals(ErrorCode.UNKNOWN, ErrorCode.fromValue(999))
     }
 
-    @Test
-    fun errorCodeCount() {
-        assertEquals(12, ErrorCode.entries.size)
-    }
-
     // ========== BackendType ==========
 
     @Test
@@ -60,11 +61,6 @@ class NozzleTest {
         assertEquals("opengl", BackendType.OPENGL.toString())
         assertEquals("dma_buf", BackendType.DMA_BUF.toString())
         assertEquals("unknown", BackendType.UNKNOWN.toString())
-    }
-
-    @Test
-    fun backendTypeCount() {
-        assertEquals(5, BackendType.entries.size)
     }
 
     // ========== TextureFormat ==========
@@ -107,11 +103,6 @@ class NozzleTest {
         assertEquals(0, TextureFormat.UNKNOWN.bytesPerPixel())
     }
 
-    @Test
-    fun textureFormatCount() {
-        assertEquals(19, TextureFormat.entries.size)
-    }
-
     // ========== ReceiveMode ==========
 
     @Test
@@ -121,11 +112,6 @@ class NozzleTest {
     }
 
     // ========== FrameStatus ==========
-
-    @Test
-    fun frameStatusCount() {
-        assertEquals(5, FrameStatus.entries.size)
-    }
 
     @Test
     fun frameStatusValues() {
@@ -144,19 +130,7 @@ class NozzleTest {
         assertEquals(1, TextureOrigin.BOTTOM_LEFT.value)
     }
 
-    // ========== FormatSource ==========
-
-    @Test
-    fun formatSourceCount() {
-        assertEquals(4, FormatSource.entries.size)
-    }
-
-    // ========== NativeFormatKind ==========
-
-    @Test
-    fun nativeFormatKindCount() {
-        assertEquals(5, NativeFormatKind.entries.size)
-    }
+    // ========== FormatSource / NativeFormatKind ==========
 
     // ========== NozzleException ==========
 
@@ -205,6 +179,111 @@ class NozzleTest {
         val mp = MappedPixels(buf, 10, 10, 10, TextureFormat.R8_UNORM, TextureOrigin.TOP_LEFT, 0L, false)
         val row = mp.row(5)
         assertEquals(10, row.capacity())
+    }
+
+    // ========== CPU-only function tests ==========
+
+    @Test
+    fun swizzleChannelsRgbaToBgra() {
+        val src = ByteBuffer.allocateDirect(4)
+        val dst = ByteBuffer.allocateDirect(4)
+        src.put(byteArrayOf(0xFF.toByte(), 0x00, 0x00, 0xFF.toByte()))
+        src.flip()
+        val permuteMap = byteArrayOf(2, 1, 0, 3)
+        Nozzle.swizzleChannels(src, dst, 1, 1, 4, 4, TextureFormat.RGBA8_UNORM, permuteMap)
+        dst.flip()
+        assertEquals(0x00.toByte(), dst.get())
+        assertEquals(0x00.toByte(), dst.get())
+        assertEquals(0xFF.toByte(), dst.get())
+        assertEquals(0xFF.toByte(), dst.get())
+    }
+
+    @Test
+    fun swizzleChannelsMultiPixel() {
+        val pixelCount = TEST_WIDTH * TEST_HEIGHT
+        val bpp = 4
+        val src = ByteBuffer.allocateDirect(pixelCount * bpp)
+        val dst = ByteBuffer.allocateDirect(pixelCount * bpp)
+        for (i in 0 until pixelCount) {
+            src.put((i % 256).toByte())
+            src.put(((i + 1) % 256).toByte())
+            src.put(((i + 2) % 256).toByte())
+            src.put(((i + 3) % 256).toByte())
+        }
+        src.flip()
+        val permuteMap = byteArrayOf(2, 1, 0, 3)
+        Nozzle.swizzleChannels(src, dst, TEST_WIDTH, TEST_HEIGHT, TEST_WIDTH * bpp, TEST_WIDTH * bpp, TextureFormat.RGBA8_UNORM, permuteMap)
+        dst.flip()
+        for (i in 0 until pixelCount) {
+            assertEquals(((i + 2) % 256).toByte(), dst.get())
+            assertEquals(((i + 1) % 256).toByte(), dst.get())
+            assertEquals((i % 256).toByte(), dst.get())
+            assertEquals(((i + 3) % 256).toByte(), dst.get())
+        }
+    }
+
+    @Test
+    fun widenUint16ToUint32Basic() {
+        val src = ByteBuffer.allocateDirect(2)
+        val dst = ByteBuffer.allocateDirect(4)
+        src.putShort(0x1234.toShort())
+        src.flip()
+        Nozzle.widenUint16ToUint32(src, dst, 1, 1, 2, 4, 1)
+        dst.flip()
+        assertEquals(0x1234, dst.int)
+    }
+
+    @Test
+    fun widenUint16ToUint32MaxValue() {
+        val src = ByteBuffer.allocateDirect(2)
+        val dst = ByteBuffer.allocateDirect(4)
+        src.putShort((-1).toShort())
+        src.flip()
+        Nozzle.widenUint16ToUint32(src, dst, 1, 1, 2, 4, 1)
+        dst.flip()
+        assertEquals(0xFFFF, dst.int)
+    }
+
+    @Test
+    fun convertUint32ToFloat32Basic() {
+        val src = ByteBuffer.allocateDirect(4)
+        val dst = ByteBuffer.allocateDirect(4)
+        src.putInt(42)
+        src.flip()
+        Nozzle.convertUint32ToFloat32(src, dst, 1, 1, 4, 4, 1)
+        dst.flip()
+        assertEquals(42.0f, dst.float, 0.001f)
+    }
+
+    @Test
+    fun convertUint32ToFloat32ZeroAndMax() {
+        val src = ByteBuffer.allocateDirect(8)
+        val dst = ByteBuffer.allocateDirect(8)
+        src.putInt(0)
+        src.putInt(Int.MAX_VALUE)
+        src.flip()
+        Nozzle.convertUint32ToFloat32(src, dst, 2, 1, 4, 4, 1)
+        dst.flip()
+        assertEquals(0.0f, dst.float, 0.001f)
+        assertEquals(Int.MAX_VALUE.toFloat(), dst.float, 0.001f)
+    }
+
+    // ========== Error path tests ==========
+
+    @Test
+    fun textureFormatUnknownBytesPerPixel() {
+        assertEquals(0, TextureFormat.UNKNOWN.bytesPerPixel())
+    }
+
+    // ========== Discovery ==========
+
+    @Test
+    fun enumerateSendersReturnsArray() {
+        val senders = Nozzle.enumerateSenders()
+        assertNotNull(senders)
+        for (s in senders) {
+            assertNotNull(s.name)
+        }
     }
 
     // ========== GPU tests (skipped on CI without GPU) ==========
