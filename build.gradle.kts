@@ -17,6 +17,5 @@ tasks.test {
     useJUnitPlatform()
     testLogging {
         events("passed", "skipped", "failed")
-        showSummary = true
     }
 }
