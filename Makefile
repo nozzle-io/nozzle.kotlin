@@ -5,7 +5,7 @@ BUILD_DIR := .build
 CXX := c++
 AR := ar
 
-CXXFLAGS := -std=c++17 -fno-exceptions -fno-rtti -O2
+CXXFLAGS := -std=c++17 -fno-exceptions -fno-rtti -O2 -fPIC
 
 UNAME_S := $(shell uname -s)
 ifeq ($(OS),Windows_NT)
@@ -46,7 +46,7 @@ ifeq ($(PLATFORM),macos)
 		$(NOZZLE_DIR)/src/backends/metal/metal_sync.mm \
 		$(NOZZLE_DIR)/src/common/channel_swizzle_vimage.cpp \
 		$(NOZZLE_DIR)/src/common/format_convert_vimage.cpp
-	JNI_LDFLAGS := -shared -framework Metal -framework IOSurface -framework Foundation -framework Accelerate -framework OpenGL -lobjc -lc++
+	JNI_LDFLAGS := -shared -framework Metal -framework IOSurface -framework Foundation -framework Accelerate -framework OpenGL -lobjc -lstdc++
 	JNI_INCLUDES := -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/darwin
 	JNI_LIB := $(BUILD_DIR)/libnozzle_jni.jnilib
 endif
@@ -66,7 +66,7 @@ ifeq ($(PLATFORM),windows)
 		$(NOZZLE_DIR)/src/backends/d3d11/d3d11_backend.cpp \
 		$(NOZZLE_DIR)/src/backends/d3d11/d3d11_texture.cpp \
 		$(NOZZLE_DIR)/src/backends/d3d11/d3d11_sync.cpp
-	JNI_LDFLAGS := -shared -ld3d11 -ldxgi -lopengl32 -lbcrypt -lc++
+	JNI_LDFLAGS := -shared -ld3d11 -ldxgi -lopengl32 -lbcrypt -lstdc++
 	JNI_INCLUDES := -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/win32
 	JNI_LIB := $(BUILD_DIR)/nozzle_jni.dll
 endif
