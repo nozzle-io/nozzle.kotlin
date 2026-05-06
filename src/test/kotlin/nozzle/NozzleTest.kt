@@ -263,7 +263,7 @@ class NozzleTest {
         src.putInt(0)
         src.putInt(Int.MAX_VALUE)
         src.rewind()
-        Nozzle.convertUint32ToFloat32(src, dst, 2, 1, 4, 4, 1)
+        Nozzle.convertUint32ToFloat32(src, dst, 2, 1, 8, 8, 1)
         dst.rewind()
         assertEquals(0.0f, dst.float, 0.001f)
         assertEquals(Int.MAX_VALUE.toFloat(), dst.float, 0.001f)
