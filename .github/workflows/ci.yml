@@ -42,4 +42,4 @@ jobs:
       - name: Run tests
         run: gradle test
         env:
-          JAVA_TOOL_OPTIONS: "-Djava.library.path=.build"
+          JAVA_TOOL_OPTIONS: "-Djava.library.path=${{ github.workspace }}/.build"

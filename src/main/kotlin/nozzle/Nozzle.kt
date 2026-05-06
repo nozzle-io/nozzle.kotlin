@@ -7,6 +7,10 @@ object Nozzle {
     fun enumerateSenders(): Array<SenderInfo> = NozzleNative.enumerateSenders()
 
     fun isGpuAvailable(): Boolean {
+        // On CI there is no GPU — avoid native crash (SIGSEGV in Metal init)
+        if (System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null) {
+            return false
+        }
         val sender = try {
             Sender.create(SenderDesc("nozzle-kotlin-gpu-check", "nozzle-kotlin"))
         } catch (_: NozzleException) {
