@@ -88,7 +88,7 @@ all: $(JNI_LIB)
 
 $(JNI_LIB): $(LIB) $(JNI_OBJS)
 	@mkdir -p $(dir $@)
-	$(CXX) $(JNI_LDFLAGS) -o $@ $(JNI_OBJS) $(LIB)
+	$(CXX) -o $@ $(JNI_OBJS) $(LIB) $(JNI_LDFLAGS)
 
 $(LIB): $(ALL_OBJS)
 	@mkdir -p $(dir $@)
