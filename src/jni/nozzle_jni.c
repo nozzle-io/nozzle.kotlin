@@ -38,7 +38,8 @@ JNIEXPORT jlong JNICALL Java_nozzle_NozzleNative_senderCreate(
     desc.name = cname;
     desc.application_name = capp;
     desc.ring_buffer_size = (uint32_t)ringBufferSize;
-    desc.allow_format_fallback = allowFormatFallback ? 1 : 0;
+    desc.fallback_flags_valid = 1;
+    desc.fallback_flags = allowFormatFallback ? NOZZLE_FALLBACK_SAFE_DEFAULTS : NOZZLE_FALLBACK_NONE;
 
     NozzleSender *sender = NULL;
     NozzleErrorCode rc = nozzle_sender_create(&desc, &sender);
