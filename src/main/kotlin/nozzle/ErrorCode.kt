@@ -12,7 +12,8 @@ enum class ErrorCode(val value: Int) {
     SENDER_NOT_FOUND(8),
     SENDER_CLOSED(9),
     TIMEOUT(10),
-    BACKEND_ERROR(11);
+    BACKEND_ERROR(11),
+    COMMAND_FAILED(12);
 
     val message: String
         get() = when (this) {
@@ -28,6 +29,7 @@ enum class ErrorCode(val value: Int) {
             SENDER_CLOSED -> "sender closed"
             TIMEOUT -> "timeout"
             BACKEND_ERROR -> "backend error"
+            COMMAND_FAILED -> "command execution failed"
         }
 
     companion object {
