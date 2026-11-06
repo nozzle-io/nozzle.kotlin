@@ -104,6 +104,16 @@ class NozzleTest {
         assertEquals(0, TextureFormat.UNKNOWN.bytesPerPixel())
     }
 
+    @Test
+    fun packedRgbComponentSizes() {
+        assertAll("three packed components",
+            { assertEquals(3 * 1, TextureFormat.RGB8_UNORM.bytesPerPixel(), "RGB8_UNORM") },
+            { assertEquals(3 * 2, TextureFormat.RGB16_UNORM.bytesPerPixel(), "RGB16_UNORM") },
+            { assertEquals(3 * 2, TextureFormat.RGB16_FLOAT.bytesPerPixel(), "RGB16_FLOAT") },
+            { assertEquals(3 * 4, TextureFormat.RGB32_FLOAT.bytesPerPixel(), "RGB32_FLOAT") },
+            { assertEquals(3 * 4, TextureFormat.RGB32_UINT.bytesPerPixel(), "RGB32_UINT") })
+    }
+
     // ========== ReceiveMode ==========
 
     @Test
