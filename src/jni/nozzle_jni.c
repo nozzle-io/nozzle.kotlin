@@ -17,6 +17,66 @@ static void throw_exception(JNIEnv *env, NozzleErrorCode code) {
     (*env)->DeleteLocalRef(env, cls);
 }
 
+// JVM charset codecs provide strict UTF-8; native storage is owned until the
+// synchronous core create call returns. Never continue JNI work after failure.
+static char *utf8_from_string(JNIEnv *env, jstring text) {
+    if ((*env)->PushLocalFrame(env, 4) < 0) return NULL;
+    char *result = NULL;
+    jclass bridge = (*env)->FindClass(env, "nozzle/NozzleNative");
+    if (!bridge) goto done;
+    jmethodID encode = (*env)->GetStaticMethodID(env, bridge, "encodeUtf8", "(Ljava/lang/String;)[B");
+    if (!encode) goto done;
+    jbyteArray bytes = (jbyteArray)(*env)->CallStaticObjectMethod(env, bridge, encode, text);
+    if ((*env)->ExceptionCheck(env) || !bytes) goto done;
+    jsize size = (*env)->GetArrayLength(env, bytes);
+    result = (char *)malloc((size_t)size + 1u);
+    if (!result) {
+        throw_exception(env, NOZZLE_ERROR_RESOURCE_CREATION_FAILED);
+        goto done;
+    }
+    (*env)->GetByteArrayRegion(env, bytes, 0, size, (jbyte *)result);
+    if ((*env)->ExceptionCheck(env)) {
+        free(result);
+        result = NULL;
+    } else {
+        result[size] = '\0';
+    }
+done:
+    (*env)->PopLocalFrame(env, NULL);
+    return result;
+}
+
+static jbyteArray utf8_bytes(JNIEnv *env, const char *text) {
+    size_t size = text ? strlen(text) : 0u;
+    if (size > INT32_MAX) {
+        throw_exception(env, NOZZLE_ERROR_INVALID_ARGUMENT);
+        return NULL;
+    }
+    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)size);
+    if (!bytes) return NULL;
+    if (size) (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)size, (const jbyte *)text);
+    return (*env)->ExceptionCheck(env) ? NULL : bytes;
+}
+
+static jobject sender_info_object(JNIEnv *env, const NozzleSenderInfo *info) {
+    if ((*env)->PushLocalFrame(env, 8) < 0) return NULL;
+    jobject result = NULL;
+    jclass bridge = (*env)->FindClass(env, "nozzle/NozzleNative");
+    if (!bridge) goto done;
+    jmethodID factory = (*env)->GetStaticMethodID(env, bridge, "senderInfo", "([B[B[BI)Lnozzle/SenderInfo;");
+    if (!factory) goto done;
+    jbyteArray name = utf8_bytes(env, info->name);
+    if (!name) goto done;
+    jbyteArray app = utf8_bytes(env, info->application_name);
+    if (!app) goto done;
+    jbyteArray id = utf8_bytes(env, info->id);
+    if (!id) goto done;
+    result = (*env)->CallStaticObjectMethod(env, bridge, factory, name, app, id, (jint)info->backend);
+    if ((*env)->ExceptionCheck(env)) result = NULL;
+done:
+    return (*env)->PopLocalFrame(env, result);
+}
+
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     (void)vm;
     (void)reserved;
@@ -31,8 +91,13 @@ JNIEXPORT jlong JNICALL Java_nozzle_NozzleNative_senderCreate(
     jint ringBufferSize, jboolean allowFormatFallback
 ) {
     (void)cls;
-    const char *cname = (*env)->GetStringUTFChars(env, name, NULL);
-    const char *capp = (*env)->GetStringUTFChars(env, applicationName, NULL);
+    char *cname = utf8_from_string(env, name);
+    if (!cname) return 0;
+    char *capp = utf8_from_string(env, applicationName);
+    if (!capp) {
+        free(cname);
+        return 0;
+    }
 
     NozzleSenderDesc desc = {0};
     desc.name = cname;
@@ -44,8 +109,8 @@ JNIEXPORT jlong JNICALL Java_nozzle_NozzleNative_senderCreate(
     NozzleSender *sender = NULL;
     NozzleErrorCode rc = nozzle_sender_create(&desc, &sender);
 
-    (*env)->ReleaseStringUTFChars(env, name, cname);
-    (*env)->ReleaseStringUTFChars(env, applicationName, capp);
+    free(cname);
+    free(capp);
 
     if (rc != NOZZLE_OK) {
         throw_exception(env, rc);
@@ -142,22 +207,7 @@ JNIEXPORT jobject JNICALL Java_nozzle_NozzleNative_senderGetInfo(
         return NULL;
     }
 
-    jclass infoCls = (*env)->FindClass(env, "nozzle/SenderInfo");
-    jmethodID ctor = (*env)->GetMethodID(env, infoCls, "<init>",
-        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V");
-
-    jstring jname = (*env)->NewStringUTF(env, info.name ? info.name : "");
-    jstring japp = (*env)->NewStringUTF(env, info.application_name ? info.application_name : "");
-    jstring jid = (*env)->NewStringUTF(env, info.id ? info.id : "");
-
-    jobject result = (*env)->NewObject(env, infoCls, ctor, jname, japp, jid, (jint)info.backend);
-
-    (*env)->DeleteLocalRef(env, infoCls);
-    (*env)->DeleteLocalRef(env, jname);
-    (*env)->DeleteLocalRef(env, japp);
-    (*env)->DeleteLocalRef(env, jid);
-
-    return result;
+    return sender_info_object(env, &info);
 }
 
 // ========== Receiver ==========
@@ -166,8 +216,13 @@ JNIEXPORT jlong JNICALL Java_nozzle_NozzleNative_receiverCreate(
     JNIEnv *env, jclass cls, jstring name, jstring applicationName, jint receiveMode
 ) {
     (void)cls;
-    const char *cname = (*env)->GetStringUTFChars(env, name, NULL);
-    const char *capp = (*env)->GetStringUTFChars(env, applicationName, NULL);
+    char *cname = utf8_from_string(env, name);
+    if (!cname) return 0;
+    char *capp = utf8_from_string(env, applicationName);
+    if (!capp) {
+        free(cname);
+        return 0;
+    }
 
     NozzleReceiverDesc desc = {0};
     desc.name = cname;
@@ -177,8 +232,8 @@ JNIEXPORT jlong JNICALL Java_nozzle_NozzleNative_receiverCreate(
     NozzleReceiver *receiver = NULL;
     NozzleErrorCode rc = nozzle_receiver_create(&desc, &receiver);
 
-    (*env)->ReleaseStringUTFChars(env, name, cname);
-    (*env)->ReleaseStringUTFChars(env, applicationName, capp);
+    free(cname);
+    free(capp);
 
     if (rc != NOZZLE_OK) {
         throw_exception(env, rc);
@@ -226,38 +281,25 @@ JNIEXPORT jobject JNICALL Java_nozzle_NozzleNative_receiverGetConnectedInfo(
         return NULL;
     }
 
-    jclass infoCls = (*env)->FindClass(env, "nozzle/ConnectedSenderInfo");
-    jmethodID ctor = (*env)->GetMethodID(env, infoCls, "<init>",
-        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIILjava/lang/Enum;DII)V");
-
-    jclass enumCls = (*env)->FindClass(env, "nozzle/TextureFormat");
-    jmethodID fromValue = (*env)->GetStaticMethodID(env, enumCls, "fromValue", "(I)Lnozzle/TextureFormat;");
-    jobject jformat = (*env)->CallStaticObjectMethod(env, enumCls, fromValue, (jint)info.format);
-
-    jclass backendCls = (*env)->FindClass(env, "nozzle/BackendType");
-    jmethodID backendFromValue = (*env)->GetStaticMethodID(env, backendCls, "fromValue", "(I)Lnozzle/BackendType;");
-    jobject jbackend = (*env)->CallStaticObjectMethod(env, backendCls, backendFromValue, (jint)info.backend);
-
-    jstring jname = (*env)->NewStringUTF(env, info.name ? info.name : "");
-    jstring japp = (*env)->NewStringUTF(env, info.application_name ? info.application_name : "");
-    jstring jid = (*env)->NewStringUTF(env, info.id ? info.id : "");
-
-    jobject result = (*env)->NewObject(env, infoCls, ctor,
-        jname, japp, jid, jbackend,
-        (jint)info.width, (jint)info.height, jformat,
-        (jdouble)info.estimated_fps,
-        (jlong)info.frame_counter, (jlong)info.last_update_time_ns);
-
-    (*env)->DeleteLocalRef(env, infoCls);
-    (*env)->DeleteLocalRef(env, enumCls);
-    (*env)->DeleteLocalRef(env, backendCls);
-    (*env)->DeleteLocalRef(env, jname);
-    (*env)->DeleteLocalRef(env, japp);
-    (*env)->DeleteLocalRef(env, jid);
-    (*env)->DeleteLocalRef(env, jformat);
-    (*env)->DeleteLocalRef(env, jbackend);
-
-    return result;
+    if ((*env)->PushLocalFrame(env, 8) < 0) return NULL;
+    jobject result = NULL;
+    jclass bridge = (*env)->FindClass(env, "nozzle/NozzleNative");
+    if (!bridge) goto done;
+    jmethodID factory = (*env)->GetStaticMethodID(env, bridge, "connectedInfo",
+        "([B[B[BIIIIDJJ)Lnozzle/ConnectedSenderInfo;");
+    if (!factory) goto done;
+    jbyteArray name = utf8_bytes(env, info.name);
+    if (!name) goto done;
+    jbyteArray app = utf8_bytes(env, info.application_name);
+    if (!app) goto done;
+    jbyteArray id = utf8_bytes(env, info.id);
+    if (!id) goto done;
+    result = (*env)->CallStaticObjectMethod(env, bridge, factory, name, app, id,
+        (jint)info.backend, (jint)info.width, (jint)info.height, (jint)info.format,
+        (jdouble)info.estimated_fps, (jlong)info.frame_counter, (jlong)info.last_update_time_ns);
+    if ((*env)->ExceptionCheck(env)) result = NULL;
+done:
+    return (*env)->PopLocalFrame(env, result);
 }
 
 // ========== Frame ==========
@@ -534,27 +576,21 @@ JNIEXPORT jobjectArray JNICALL Java_nozzle_NozzleNative_enumerateSenders(
     }
 
     jclass infoCls = (*env)->FindClass(env, "nozzle/SenderInfo");
-    jobjectArray result = (*env)->NewObjectArray(env, (jsize)array.count, infoCls, NULL);
-
+    jobjectArray result = NULL;
+    if (!infoCls) goto done;
+    result = (*env)->NewObjectArray(env, (jsize)array.count, infoCls, NULL);
+    if (!result) goto done;
     for (uint32_t i = 0; i < array.count; i++) {
-        NozzleSenderInfo *si = &array.items[i];
-        jmethodID ctor = (*env)->GetMethodID(env, infoCls, "<init>",
-            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V");
-        jstring jname = (*env)->NewStringUTF(env, si->name ? si->name : "");
-        jstring japp = (*env)->NewStringUTF(env, si->application_name ? si->application_name : "");
-        jstring jid = (*env)->NewStringUTF(env, si->id ? si->id : "");
-        jobject obj = (*env)->NewObject(env, infoCls, ctor, jname, japp, jid, (jint)si->backend);
+        jobject obj = sender_info_object(env, &array.items[i]);
+        if (!obj) break;
         (*env)->SetObjectArrayElement(env, result, (jsize)i, obj);
         (*env)->DeleteLocalRef(env, obj);
-        (*env)->DeleteLocalRef(env, jname);
-        (*env)->DeleteLocalRef(env, japp);
-        (*env)->DeleteLocalRef(env, jid);
+        if ((*env)->ExceptionCheck(env)) break;
     }
-
+done:
     nozzle_free_sender_info_array(&array);
-    (*env)->DeleteLocalRef(env, infoCls);
-
-    return result;
+    if (infoCls) (*env)->DeleteLocalRef(env, infoCls);
+    return (*env)->ExceptionCheck(env) ? NULL : result;
 }
 
 // ========== Pixel Utilities ==========

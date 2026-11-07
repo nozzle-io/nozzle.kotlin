@@ -3,6 +3,34 @@ package nozzle
 import java.nio.ByteBuffer
 
 internal object NozzleNative {
+    // Strict standard UTF-8, not JNI's modified UTF-8 or replacement encoding.
+    @JvmStatic
+    private fun encodeUtf8(text: String?): ByteArray {
+        val value = text ?: ""
+        require('\u0000' !in value) { "embedded NUL in name" }
+        val bytes = Charsets.UTF_8.newEncoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            .encode(java.nio.CharBuffer.wrap(value))
+        return ByteArray(bytes.remaining()).also { bytes.get(it) }
+    }
+
+    @JvmStatic
+    private fun decodeUtf8(bytes: ByteArray): String = Charsets.UTF_8.newDecoder()
+        .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+        .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+        .decode(ByteBuffer.wrap(bytes)).toString()
+
+    @JvmStatic
+    private fun senderInfo(name: ByteArray, app: ByteArray, id: ByteArray, backend: Int): SenderInfo =
+        SenderInfo(decodeUtf8(name), decodeUtf8(app), decodeUtf8(id), BackendType.fromValue(backend))
+
+    @JvmStatic
+    private fun connectedInfo(name: ByteArray, app: ByteArray, id: ByteArray, backend: Int,
+        width: Int, height: Int, format: Int, fps: Double, frame: Long, time: Long): ConnectedSenderInfo =
+        ConnectedSenderInfo(decodeUtf8(name), decodeUtf8(app), decodeUtf8(id), BackendType.fromValue(backend),
+            width, height, TextureFormat.fromValue(format), fps, frame, time)
+
     init {
         System.loadLibrary("nozzle_jni")
     }
