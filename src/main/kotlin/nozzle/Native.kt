@@ -7,19 +7,29 @@ internal object NozzleNative {
     @JvmStatic
     private fun encodeUtf8(text: String?): ByteArray {
         val value = text ?: ""
-        require('\u0000' !in value) { "embedded NUL in name" }
-        val bytes = Charsets.UTF_8.newEncoder()
-            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
-            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
-            .encode(java.nio.CharBuffer.wrap(value))
-        return ByteArray(bytes.remaining()).also { bytes.get(it) }
+        if ('\u0000' in value) {
+            throw NozzleException(ErrorCode.INVALID_ARGUMENT, "embedded NUL in name or application name")
+        }
+        try {
+            val bytes = Charsets.UTF_8.newEncoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                .encode(java.nio.CharBuffer.wrap(value))
+            return ByteArray(bytes.remaining()).also { bytes.get(it) }
+        } catch (error: java.nio.charset.CharacterCodingException) {
+            throw NozzleException(ErrorCode.INVALID_ARGUMENT, "unpaired surrogate in name or application name")
+        }
     }
 
     @JvmStatic
-    private fun decodeUtf8(bytes: ByteArray): String = Charsets.UTF_8.newDecoder()
-        .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
-        .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
-        .decode(ByteBuffer.wrap(bytes)).toString()
+    private fun decodeUtf8(bytes: ByteArray): String = try {
+        Charsets.UTF_8.newDecoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(bytes)).toString()
+    } catch (error: java.nio.charset.CharacterCodingException) {
+        throw NozzleException(ErrorCode.INVALID_ARGUMENT, "invalid UTF-8 returned by native code")
+    }
 
     @JvmStatic
     private fun senderInfo(name: ByteArray, app: ByteArray, id: ByteArray, backend: Int): SenderInfo =

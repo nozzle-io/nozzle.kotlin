@@ -1,6 +1,5 @@
 package nozzle
 
-import java.nio.charset.CharacterCodingException
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assumptions.assumeFalse
 import kotlin.test.assertEquals
@@ -20,14 +19,36 @@ class Utf8NamesTest {
                 { Receiver.create(ReceiverDesc("valid", bad)).use {} }
             )
             for (operation in operations) {
-                if ('\u0000' in bad) assertFailsWith<IllegalArgumentException> { operation() }
-                else assertFailsWith<CharacterCodingException> { operation() }
+                val error = assertFailsWith<NozzleException> { operation() }
+                assertEquals(NozzleException::class.java, error.javaClass)
+                assertEquals(ErrorCode.INVALID_ARGUMENT, error.errorCode)
+                assertEquals(if ('\u0000' in bad) "embedded NUL in name or application name"
+                    else "unpaired surrogate in name or application name", error.message)
             }
         }
         val error = assertFailsWith<NozzleException> {
             Sender.create(SenderDesc("a".repeat(64), application)).use {}
         }
         assertEquals(ErrorCode.INVALID_ARGUMENT, error.errorCode)
+    }
+
+    @Test
+    fun malformedNativeBytesUseTheRuntimeErrorContract() {
+        // Codec-level negative control; this does not simulate corrupted core IPC.
+        val decode = NozzleNative::class.java.getDeclaredMethod("decodeUtf8", ByteArray::class.java)
+        decode.isAccessible = true
+        for (bad in listOf(byteArrayOf(0xff.toByte()), byteArrayOf(0xed.toByte(), 0xa0.toByte(), 0x80.toByte()))) {
+            val error = assertFailsWith<NozzleException> {
+                try {
+                    decode.invoke(null, bad)
+                } catch (error: java.lang.reflect.InvocationTargetException) {
+                    throw error.targetException
+                }
+            }
+            assertEquals(NozzleException::class.java, error.javaClass)
+            assertEquals(ErrorCode.INVALID_ARGUMENT, error.errorCode)
+            assertEquals("invalid UTF-8 returned by native code", error.message)
+        }
     }
 
     @Test

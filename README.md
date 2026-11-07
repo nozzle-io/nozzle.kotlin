@@ -90,10 +90,11 @@ if (Nozzle.isGpuAvailable()) {
 ## Error Handling
 
 Names cross JNI as strict standard UTF-8, including supplementary Unicode characters.
-The sender-name limit is 63 UTF-8 bytes, not UTF-16 code units. Embedded NUL is
-rejected with `IllegalArgumentException`; unpaired surrogates are rejected by the
-charset encoder with `CharacterCodingException`, without replacement. Native
-returned names are decoded strictly as well. Public method signatures are unchanged.
+The sender-name limit is 63 UTF-8 bytes, not UTF-16 code units. Embedded NUL,
+unpaired surrogates and malformed native UTF-8 are rejected with the existing
+unchecked `NozzleException`, code `INVALID_ARGUMENT`, and a diagnostic message.
+Charset failures never escape as checked `CharacterCodingException` or silently
+replace characters. Public method signatures are unchanged.
 The focused `Utf8NamesTest` uses real JNI sender info, discovery and receiver lookup
 on macOS/Windows without the CI GPU-skip helper. Linux explicitly skips that
 default-backend round trip but still runs malformed-input controls; no pixels are tested.
