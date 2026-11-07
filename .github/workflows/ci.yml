@@ -60,6 +60,11 @@ jobs:
       - name: Compile Kotlin
         run: gradle compileKotlin compileTestKotlin
 
+      - name: Native UTF-8 names (macOS/Windows required; Linux explicit backend skip)
+        run: gradle test --tests nozzle.Utf8NamesTest
+        env:
+          JAVA_TOOL_OPTIONS: "-Djava.library.path=${{ github.workspace }}/.build"
+
       - name: Run tests
         run: gradle test
         env:
