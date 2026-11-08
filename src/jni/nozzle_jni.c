@@ -58,6 +58,19 @@ static jbyteArray utf8_bytes(JNIEnv *env, const char *text) {
     return (*env)->ExceptionCheck(env) ? NULL : bytes;
 }
 
+static jbyteArray snapshot_utf8_bytes(JNIEnv *env, const char *text, size_t capacity) {
+    size_t size = 0;
+    while (size < capacity && text[size] != '\0') ++size;
+    if (size > INT32_MAX) {
+        throw_exception(env, NOZZLE_ERROR_INVALID_ARGUMENT);
+        return NULL;
+    }
+    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)size);
+    if (!bytes) return NULL;
+    if (size) (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)size, (const jbyte *)text);
+    return (*env)->ExceptionCheck(env) ? NULL : bytes;
+}
+
 static jobject sender_info_object(JNIEnv *env, const NozzleSenderInfo *info) {
     if ((*env)->PushLocalFrame(env, 8) < 0) return NULL;
     jobject result = NULL;
@@ -70,6 +83,25 @@ static jobject sender_info_object(JNIEnv *env, const NozzleSenderInfo *info) {
     jbyteArray app = utf8_bytes(env, info->application_name);
     if (!app) goto done;
     jbyteArray id = utf8_bytes(env, info->id);
+    if (!id) goto done;
+    result = (*env)->CallStaticObjectMethod(env, bridge, factory, name, app, id, (jint)info->backend);
+    if ((*env)->ExceptionCheck(env)) result = NULL;
+done:
+    return (*env)->PopLocalFrame(env, result);
+}
+
+static jobject sender_snapshot_object(JNIEnv *env, const NozzleSenderInfoSnapshot *info) {
+    if ((*env)->PushLocalFrame(env, 8) < 0) return NULL;
+    jobject result = NULL;
+    jclass bridge = (*env)->FindClass(env, "nozzle/NozzleNative");
+    if (!bridge) goto done;
+    jmethodID factory = (*env)->GetStaticMethodID(env, bridge, "senderInfo", "([B[B[BI)Lnozzle/SenderInfo;");
+    if (!factory) goto done;
+    jbyteArray name = snapshot_utf8_bytes(env, info->name, sizeof(info->name));
+    if (!name) goto done;
+    jbyteArray app = snapshot_utf8_bytes(env, info->application_name, sizeof(info->application_name));
+    if (!app) goto done;
+    jbyteArray id = snapshot_utf8_bytes(env, info->id, sizeof(info->id));
     if (!id) goto done;
     result = (*env)->CallStaticObjectMethod(env, bridge, factory, name, app, id, (jint)info->backend);
     if ((*env)->ExceptionCheck(env)) result = NULL;
@@ -198,8 +230,8 @@ JNIEXPORT jobject JNICALL Java_nozzle_NozzleNative_senderGetInfo(
     JNIEnv *env, jclass cls, jlong senderPtr
 ) {
     (void)cls;
-    NozzleSenderInfo info = {0};
-    NozzleErrorCode rc = nozzle_sender_get_info(
+    NozzleSenderInfoSnapshot info = {0};
+    NozzleErrorCode rc = nozzle_sender_get_info_snapshot(
         (NozzleSender *)(intptr_t)senderPtr, &info
     );
     if (rc != NOZZLE_OK) {
@@ -207,7 +239,7 @@ JNIEXPORT jobject JNICALL Java_nozzle_NozzleNative_senderGetInfo(
         return NULL;
     }
 
-    return sender_info_object(env, &info);
+    return sender_snapshot_object(env, &info);
 }
 
 // ========== Receiver ==========
@@ -268,12 +300,12 @@ JNIEXPORT jlong JNICALL Java_nozzle_NozzleNative_receiverAcquireFrame(
     return (jlong)(intptr_t)frame;
 }
 
-JNIEXPORT jobject JNICALL Java_nozzle_NozzleNative_receiverGetConnectedInfo(
+JNIEXPORT jobject JNICALL Java_nozzle_NozzleNative_receiverGetConnectionSnapshot(
     JNIEnv *env, jclass cls, jlong receiverPtr
 ) {
     (void)cls;
-    NozzleConnectedSenderInfo info = {0};
-    NozzleErrorCode rc = nozzle_receiver_get_connected_info(
+    NozzleConnectedSenderSnapshot info = {0};
+    NozzleErrorCode rc = nozzle_receiver_get_connected_info_snapshot(
         (NozzleReceiver *)(intptr_t)receiverPtr, &info
     );
     if (rc != NOZZLE_OK) {
@@ -285,18 +317,19 @@ JNIEXPORT jobject JNICALL Java_nozzle_NozzleNative_receiverGetConnectedInfo(
     jobject result = NULL;
     jclass bridge = (*env)->FindClass(env, "nozzle/NozzleNative");
     if (!bridge) goto done;
-    jmethodID factory = (*env)->GetStaticMethodID(env, bridge, "connectedInfo",
-        "([B[B[BIIIIDJJ)Lnozzle/ConnectedSenderInfo;");
+    jmethodID factory = (*env)->GetStaticMethodID(env, bridge, "connectionSnapshot",
+        "([B[B[BIIIIDJJZ)Lnozzle/ConnectionSnapshot;");
     if (!factory) goto done;
-    jbyteArray name = utf8_bytes(env, info.name);
+    jbyteArray name = snapshot_utf8_bytes(env, info.name, sizeof(info.name));
     if (!name) goto done;
-    jbyteArray app = utf8_bytes(env, info.application_name);
+    jbyteArray app = snapshot_utf8_bytes(env, info.application_name, sizeof(info.application_name));
     if (!app) goto done;
-    jbyteArray id = utf8_bytes(env, info.id);
+    jbyteArray id = snapshot_utf8_bytes(env, info.id, sizeof(info.id));
     if (!id) goto done;
     result = (*env)->CallStaticObjectMethod(env, bridge, factory, name, app, id,
         (jint)info.backend, (jint)info.width, (jint)info.height, (jint)info.format,
-        (jdouble)info.estimated_fps, (jlong)info.frame_counter, (jlong)info.last_update_time_ns);
+        (jdouble)info.estimated_fps, (jlong)info.frame_counter, (jlong)info.last_update_time_ns,
+        (jboolean)(info.connected != 0));
     if ((*env)->ExceptionCheck(env)) result = NULL;
 done:
     return (*env)->PopLocalFrame(env, result);

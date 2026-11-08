@@ -41,6 +41,9 @@ class Utf8NamesTest {
                 assertEquals(own.id, before.id)
                 assertEquals(own.backend, before.backend)
                 assertTrue(receiver.isConnected)
+                val beforeSnapshot = receiver.connectionSnapshot()
+                assertTrue(beforeSnapshot.connected)
+                assertEquals(before, beforeSnapshot.info)
                 sender.close()
                 val error = assertFailsWith<NozzleException> {
                     receiver.acquireFrame(0).use { }
@@ -55,6 +58,11 @@ class Utf8NamesTest {
                 val connected = receiver.isConnected
                 println("METADATA_NATIVE acquire=senderClosed retained_id=${after.id} connected=$connected")
                 assertFalse(connected, "After ${error.errorCode} with retained identity ${after.id}, isConnected must be false")
+                val afterSnapshot = receiver.connectionSnapshot()
+                assertFalse(afterSnapshot.connected)
+                assertEquals(after, afterSnapshot.info)
+                assertTrue(beforeSnapshot.connected)
+                assertEquals(before, beforeSnapshot.info)
             }
         }
     }
@@ -67,8 +75,12 @@ class Utf8NamesTest {
             Receiver.create(ReceiverDesc(name, application)).use { receiver ->
                 val own = sender.info()
                 val info = receiver.connectedInfo()
+                val snapshot = receiver.connectionSnapshot()
+                assertTrue(snapshot.connected)
+                assertEquals(info, snapshot.info)
                 assertEquals(own.id, sender.info().id)
                 assertEquals(info.id, receiver.connectedInfo().id)
+                assertEquals(snapshot, receiver.connectionSnapshot())
                 receiver.close()
                 sender.close()
                 assertEquals(name, own.name)
@@ -79,6 +91,8 @@ class Utf8NamesTest {
                 assertEquals(own.applicationName, info.applicationName)
                 assertEquals(own.id, info.id)
                 assertEquals(own.backend, info.backend)
+                assertTrue(snapshot.connected)
+                assertEquals(info, snapshot.info)
                 println("METADATA_NATIVE owned_UTF8_after_close id=${own.id}")
             }
         }

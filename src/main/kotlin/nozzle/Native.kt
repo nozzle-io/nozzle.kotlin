@@ -41,6 +41,12 @@ internal object NozzleNative {
         ConnectedSenderInfo(decodeUtf8(name), decodeUtf8(app), decodeUtf8(id), BackendType.fromValue(backend),
             width, height, TextureFormat.fromValue(format), fps, frame, time)
 
+    @JvmStatic
+    private fun connectionSnapshot(name: ByteArray, app: ByteArray, id: ByteArray, backend: Int,
+        width: Int, height: Int, format: Int, fps: Double, frame: Long, time: Long,
+        connected: Boolean): ConnectionSnapshot =
+        ConnectionSnapshot(connected, connectedInfo(name, app, id, backend, width, height, format, fps, frame, time))
+
     init {
         System.loadLibrary("nozzle_jni")
     }
@@ -80,7 +86,7 @@ internal object NozzleNative {
 
     external fun receiverAcquireFrame(receiverPtr: Long, timeoutMs: Long): Long
 
-    external fun receiverGetConnectedInfo(receiverPtr: Long): ConnectedSenderInfo
+    external fun receiverGetConnectionSnapshot(receiverPtr: Long): ConnectionSnapshot
 
     external fun frameRelease(framePtr: Long)
 

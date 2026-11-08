@@ -23,12 +23,13 @@ class Receiver private constructor(private var ptr: Long) : AutoCloseable {
         return Frame(framePtr)
     }
 
-    fun connectedInfo(): ConnectedSenderInfo = NozzleNative.receiverGetConnectedInfo(ptr)
+    fun connectionSnapshot(): ConnectionSnapshot = NozzleNative.receiverGetConnectionSnapshot(ptr)
+
+    fun connectedInfo(): ConnectedSenderInfo = connectionSnapshot().info
 
     val isConnected: Boolean
         get() = try {
-            connectedInfo()
-            true
+            connectionSnapshot().connected
         } catch (_: NozzleException) {
             false
         }
