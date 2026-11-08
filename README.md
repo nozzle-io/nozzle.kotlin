@@ -77,6 +77,34 @@ val senders = Nozzle.enumerateSenders()
 println("found ${senders.size} senders")
 ```
 
+### Owned Metadata
+
+`sender.info()` and `receiver.connectionSnapshot()` copy native metadata into
+owned Kotlin values. A `ConnectionSnapshot` contains `connected: Boolean` and
+`info: ConnectedSenderInfo` from one coherent native snapshot.
+`receiver.connectedInfo()` projects that `info`; its existing constructor,
+fields and data-class components are unchanged. `receiver.isConnected` reads
+the snapshot flag and returns false on `NozzleException`, not on arbitrary JVM errors.
+
+The flag is the receiver's **last-observed** state, not a fresh sender-liveness
+check. After an acquire observes `SENDER_CLOSED`, the flag is false while `info`
+retains the last-known sender identity. Previously returned values remain valid
+after later getters and closing either handle. This does not make concurrent
+operations or concurrent `close()` on the same handle safe, and does not promise
+automatic reconnect. Discovery keeps its existing enumeration and array-free path.
+
+Build the Kotlin classes and JNI library together. JNI now requires core's
+`nozzle_sender_get_info_snapshot` and `nozzle_receiver_get_connected_info_snapshot`
+exports, provided by the pinned core; there is no borrowed-getter fallback.
+The full native snapshot structs are used internally, without adding semantic or
+native-format fields to the existing Kotlin metadata model.
+
+`Utf8NamesTest` requires real JNI metadata lifecycle checks on macOS/Windows:
+exact `SENDER_CLOSED` observation, retained identity with a false connection flag,
+and owned UTF-8 values after later getters and both closes. Linux explicitly skips
+these default-backend cases. These checks do not establish pixel transfer,
+concurrent-handle safety or cross-process behavior.
+
 ### GPU Check
 
 ```kotlin

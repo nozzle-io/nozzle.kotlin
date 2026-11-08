@@ -4,10 +4,99 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assumptions.assumeFalse
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class Utf8NamesTest {
     private val supplementary = "\uD83D\uDE80"
     private val application = "\u65E5\u672C-app-" + supplementary
+
+    private fun metadataName(label: String): String {
+        val name = "k193-$label-${ProcessHandle.current().pid()}-${System.nanoTime()}-\u65E5$supplementary"
+        assertTrue(name.toByteArray(Charsets.UTF_8).size <= 63)
+        return name
+    }
+
+    private fun requireMetadataRuntime() {
+        val os = System.getProperty("os.name")
+        assumeFalse(os.startsWith("Linux"),
+            "SKIP: Linux default backend unavailable; no native metadata lifecycle claim")
+        assertTrue(os.startsWith("Mac") || os.startsWith("Windows"), "Unsupported metadata platform: $os")
+    }
+
+    private fun expectedBackend(): BackendType =
+        if (System.getProperty("os.name").startsWith("Windows")) BackendType.D3D11 else BackendType.METAL
+
+    @Test
+    fun nativeCloseRetainsIdentityButClearsConnection() {
+        requireMetadataRuntime()
+        val name = metadataName("close")
+        Sender.create(SenderDesc(name, application)).use { sender ->
+            Receiver.create(ReceiverDesc(name, application)).use { receiver ->
+                val own = sender.info()
+                val before = receiver.connectedInfo()
+                assertEquals(expectedBackend(), own.backend)
+                assertEquals(name, before.name)
+                assertEquals(application, before.applicationName)
+                assertEquals(own.id, before.id)
+                assertEquals(own.backend, before.backend)
+                assertTrue(receiver.isConnected)
+                val beforeSnapshot = receiver.connectionSnapshot()
+                assertTrue(beforeSnapshot.connected)
+                assertEquals(before, beforeSnapshot.info)
+                sender.close()
+                val error = assertFailsWith<NozzleException> {
+                    receiver.acquireFrame(0).use { }
+                }
+                assertEquals(NozzleException::class.java, error.javaClass)
+                assertEquals(ErrorCode.SENDER_CLOSED, error.errorCode)
+                val after = receiver.connectedInfo()
+                assertEquals(before.name, after.name)
+                assertEquals(before.applicationName, after.applicationName)
+                assertEquals(before.id, after.id)
+                assertEquals(before.backend, after.backend)
+                val connected = receiver.isConnected
+                println("METADATA_NATIVE acquire=senderClosed retained_id=${after.id} connected=$connected")
+                assertFalse(connected, "After ${error.errorCode} with retained identity ${after.id}, isConnected must be false")
+                val afterSnapshot = receiver.connectionSnapshot()
+                assertFalse(afterSnapshot.connected)
+                assertEquals(after, afterSnapshot.info)
+                assertTrue(beforeSnapshot.connected)
+                assertEquals(before, beforeSnapshot.info)
+            }
+        }
+    }
+
+    @Test
+    fun nativeMetadataOwnsUtf8AfterLaterGettersAndBothCloses() {
+        requireMetadataRuntime()
+        val name = metadataName("owned")
+        Sender.create(SenderDesc(name, application)).use { sender ->
+            Receiver.create(ReceiverDesc(name, application)).use { receiver ->
+                val own = sender.info()
+                val info = receiver.connectedInfo()
+                val snapshot = receiver.connectionSnapshot()
+                assertTrue(snapshot.connected)
+                assertEquals(info, snapshot.info)
+                assertEquals(own.id, sender.info().id)
+                assertEquals(info.id, receiver.connectedInfo().id)
+                assertEquals(snapshot, receiver.connectionSnapshot())
+                receiver.close()
+                sender.close()
+                assertEquals(name, own.name)
+                assertEquals(application, own.applicationName)
+                assertTrue(own.id.isNotEmpty())
+                assertEquals(expectedBackend(), own.backend)
+                assertEquals(own.name, info.name)
+                assertEquals(own.applicationName, info.applicationName)
+                assertEquals(own.id, info.id)
+                assertEquals(own.backend, info.backend)
+                assertTrue(snapshot.connected)
+                assertEquals(info, snapshot.info)
+                println("METADATA_NATIVE owned_UTF8_after_close id=${own.id}")
+            }
+        }
+    }
 
     @Test
     fun malformedNamesAndApplicationsAreRejectedThroughJni() {
